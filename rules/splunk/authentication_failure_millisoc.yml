@@ -46,7 +46,7 @@ splunk:
     | sort - count
 
   cron_schedule: "*/5 * * * *"
-  earliest_time: "-5m"
+  earliest_time: "-1000m"
   latest_time: "now"
 
   alert_type: "number of events"
