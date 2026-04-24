@@ -1,0 +1,65 @@
+id: SPL-006
+name: Logging and Alerting Failures - Host Not Sending Logs
+description: Detects hosts that have not sent logs to Splunk for more than 30 minutes, which may indicate logging failure, agent failure, forwarding issue, or monitoring gap.
+enabled: true
+severity: high
+
+tags:
+  - splunk
+  - logging-failure
+  - alerting-failure
+  - monitoring-failure
+  - missing-logs
+  - host-not-reporting
+  - millisoc.tech
+
+owasp:
+  category: A09
+  name: Security Logging and Monitoring Failures
+
+mitre:
+  tactics:
+    - Defense Evasion
+  techniques:
+    - T1562
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    | metadata type=hosts index=*
+    | where recentTime < relative_time(now(), "-30m")
+    | eval last_seen=strftime(recentTime, "%Y-%m-%d %H:%M:%S")
+    | eval minutes_since_last_log=round((now()-recentTime)/60, 2)
+    | eval failure_type="Host Not Sending Logs"
+    | table host totalCount recentTime last_seen minutes_since_last_log failure_type
+    | sort - minutes_since_last_log
+
+  cron_schedule: "*/5 * * * *"
+  earliest_time: "-60m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: host
+  object_type: system
+  score: 70
+
+false_positives:
+  - Host was intentionally shut down
+  - Server maintenance
+  - Network connectivity issue
+  - Splunk forwarder restart
+  - Temporary log source inactivity
+
+references:
+  - https://owasp.org/Top10/A09_2021-Security_Logging_and_Monitoring_Failures/
+  - https://attack.mitre.org/techniques/T1562/

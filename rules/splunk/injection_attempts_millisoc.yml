@@ -1,0 +1,99 @@
+id: SPL-004
+name: Injection Attempts - millisoc.tech
+description: Detects possible SQL Injection, XSS, Path Traversal, Command Injection, Blind SQL Injection, and SQL Server Injection attempts against millisoc.tech.
+enabled: true
+severity: critical
+
+tags:
+  - web
+  - splunk
+  - injection
+  - sql-injection
+  - xss
+  - path-traversal
+  - command-injection
+  - millisoc.tech
+
+owasp:
+  category: A03
+  name: Injection
+
+mitre:
+  tactics:
+    - Initial Access
+    - Execution
+  techniques:
+    - T1190
+    - T1059
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index="*"
+    | spath host
+    | search host="millisoc.tech"
+
+    | rex field=_raw "(?P<clientip>\d{1,3}(?:\.\d{1,3}){3})"
+    | rex field=_raw "(?P<uri>\/[^\s?]*(?:\?[^\s]*)?)"
+    | rex field=_raw "(?P<status>[2345]\d{2})"
+    | rex field=_raw "(?P<useragent>Mozilla\/[\d.]+\s\([^)]+\)[\w\s\/._,;:+()-]*)"
+
+    | where match(uri, "(?i)((\%27|\')|(\%22|\")|(\-\-)|(\%3B|\;))")
+          OR match(uri, "(?i)(select|insert|update|delete|drop|union|exec|execute|cast|convert|declare)")
+          OR match(uri, "(?i)(script|alert|onerror|onload|javascript|vbscript|<svg|<img|<iframe)")
+          OR match(uri, "(?i)(\.\./|\.\.\\|%2e%2e%2f|%2e%2e\/|\.\.%2f)")
+          OR match(uri, "(?i)(;|\||\`|\$\(|&&|\|\|)")
+          OR match(uri, "(?i)(sleep\(|benchmark\(|waitfor|delay)")
+          OR match(uri, "(?i)(xp_cmdshell|sp_executesql|information_schema|sysobjects)")
+          OR match(uri, "(?i)(nc\s|wget\s|curl\s|bash\s|sh\s|cmd\.exe|powershell)")
+
+    | eval injection_type=case(
+        match(uri, "(?i)(select|insert|update|delete|drop|union|exec|declare)"), "SQL Injection",
+        match(uri, "(?i)(script|alert|onerror|onload|javascript|<svg|<img)"), "XSS",
+        match(uri, "(?i)(\.\./|%2e%2e%2f|\.\.%2f)"), "Path Traversal",
+        match(uri, "(?i)(;|\||\`|\$\(|nc\s|wget\s|curl\s|bash)"), "Command Injection",
+        match(uri, "(?i)(sleep\(|benchmark\(|waitfor)"), "Blind SQL Injection",
+        match(uri, "(?i)(xp_cmdshell|sp_executesql|information_schema)"), "SQL Server Injection",
+        true(), "Unknown Injection"
+    )
+
+    | eval severity=case(
+        match(uri, "(?i)(drop|exec|xp_cmdshell|cmd\.exe|powershell|bash)"), "CRITICAL",
+        match(uri, "(?i)(select|union|insert|delete|sleep\(|benchmark\()"), "HIGH",
+        match(uri, "(?i)(script|alert|onerror|javascript)"), "MEDIUM",
+        true(), "LOW"
+    )
+
+    | stats count by _time, clientip, uri, status, useragent, injection_type, severity
+    | sort - severity, count
+
+  cron_schedule: "*/5 * * * *"
+  earliest_time: "-5m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: clientip
+  object_type: ip
+  score: 90
+
+false_positives:
+  - Authorized penetration testing
+  - Vulnerability scanners
+  - Web application security testing tools
+  - Developers testing input validation
+  - Search queries containing special characters
+
+references:
+  - https://owasp.org/Top10/A03_2021-Injection/
+  - https://attack.mitre.org/techniques/T1190/
+  - https://attack.mitre.org/techniques/T1059/

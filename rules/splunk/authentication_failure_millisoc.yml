@@ -1,0 +1,76 @@
+id: SPL-012
+name: Authentication Failure - millisoc.tech
+description: Detects failed login activity, missing login pages, and suspicious authentication failure patterns against millisoc.tech.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - authentication-failure
+  - failed-login
+  - login
+  - millisoc.tech
+
+owasp:
+  category: A07
+  name: Identification and Authentication Failures
+
+mitre:
+  tactics:
+    - Credential Access
+    - Initial Access
+  techniques:
+    - T1110
+    - T1190
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index="*" host="millisoc.tech" "login"
+    | rex field=_raw "(?P<clientip>\d{1,3}(?:\.\d{1,3}){3})"
+    | rex field=_raw "\"(?P<method>\w+)\s+(?P<uri>[^\s?]+(?:\?[^\s]+)?)"
+    | rex field=_raw "\"\s+(?P<status>\d{3})"
+    | eval method=upper(method)
+    | eval uri=lower(uri)
+    | eval status=tonumber(status)
+    | where like(uri,"%login%") AND (status=404 OR match(_raw, "(?i)login failed"))
+    | eval auth_failure_type=case(
+        status=404, "Login Endpoint Not Found",
+        match(_raw, "(?i)login failed"), "Failed Login Attempt",
+        true(), "Possible Authentication Failure"
+    )
+    | stats count by _time, clientip, method, uri, status, auth_failure_type
+    | sort - count
+
+  cron_schedule: "*/5 * * * *"
+  earliest_time: "-5m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: clientip
+  object_type: ip
+  score: 75
+
+false_positives:
+  - User typed wrong password
+  - Expired user session
+  - Broken login link
+  - Application deployment changed login path
+  - Authorized authentication testing
+  - Vulnerability scanner checking login endpoints
+
+references:
+  - https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+  - https://attack.mitre.org/techniques/T1110/
+  - https://attack.mitre.org/techniques/T1190/

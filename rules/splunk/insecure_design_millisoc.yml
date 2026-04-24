@@ -1,0 +1,86 @@
+id: SPL-005
+name: Insecure Design - millisoc.tech
+description: Detects access attempts to sensitive, internal, debug, configuration, log, environment, and repository paths that may indicate insecure application design.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - insecure-design
+  - sensitive-endpoints
+  - admin-panel
+  - debug-endpoints
+  - millisoc.tech
+
+owasp:
+  category: A04
+  name: Insecure Design
+
+mitre:
+  tactics:
+    - Initial Access
+    - Discovery
+  techniques:
+    - T1190
+    - T1083
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index="*"
+    | spath host
+    | search host="millisoc.tech"
+    | rex field=_raw "(?<clientip>\d{1,3}(?:\.\d{1,3}){3})"
+    | rex field=_raw "\"(?<method>GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+(?<uri>[^\s\"]+)"
+    | rex field=_raw "\"\s+(?<status>\d{3})\s+"
+    | rex field=_raw "(?P<useragent>Mozilla\/[\d.]+\s\([^)]+\)[\w\s\/._,;:+()-]*)"
+    | eval method=upper(method)
+    | eval uri=lower(uri)
+    | eval status=tonumber(status)
+    | regex uri="(?i)^/(admin|config|settings|debug|internal metrics|logs|\.env|\.git)(/|$)"
+    | where method="GET" AND (status=200 OR status=302 OR status=404)
+    | eval design_issue=case(
+        like(uri,"/admin%"), "Exposed Admin Endpoint",
+        like(uri,"/config%"), "Exposed Configuration Endpoint",
+        like(uri,"/settings%"), "Exposed Settings Endpoint",
+        like(uri,"/debug%"), "Exposed Debug Endpoint",
+        like(uri,"/internal metrics%"), "Exposed Internal Metrics",
+        like(uri,"/logs%"), "Exposed Log Endpoint",
+        like(uri,"/.env%"), "Exposed Environment File",
+        like(uri,"/.git%"), "Exposed Git Repository",
+        true(), "Sensitive Endpoint Exposure"
+    )
+    | stats count by _time, useragent, clientip, uri, method, status, design_issue
+    | sort - count
+
+  cron_schedule: "*/5 * * * *"
+  earliest_time: "-5m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: clientip
+  object_type: ip
+  score: 80
+
+false_positives:
+  - Authorized security testing
+  - Internal vulnerability scanners
+  - Admin users accessing legitimate admin panels
+  - Development or staging environment traffic
+  - Automated web crawlers discovering public paths
+
+references:
+  - https://owasp.org/Top10/A04_2021-Insecure_Design/
+  - https://attack.mitre.org/techniques/T1190/
+  - https://attack.mitre.org/techniques/T1083/

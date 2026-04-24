@@ -1,0 +1,91 @@
+id: SPL-008
+name: SQL Injection Attempt Burst - millisoc.tech
+description: Detects repeated SQL Injection attempt activity from the same source IP within the last 24 hours against millisoc.tech Nginx logs.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - sql-injection
+  - injection
+  - burst-activity
+  - nginx
+  - millisoc.tech
+
+owasp:
+  category: A03
+  name: Injection
+
+mitre:
+  tactics:
+    - Initial Access
+  techniques:
+    - T1190
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index=* sourcetype=_json source=millisoc-nginx earliest=-24h latest=now
+    | spath
+    | eval src_ip=if(isnotnull(x_forwarded_for) AND x_forwarded_for!="", x_forwarded_for, remote_addr)
+    | eval http_method=upper(method)
+    | eval uri_path=lower(uri)
+    | eval req_line=lower(request)
+    | eval http_status=tonumber(status)
+    | where isnotnull(src_ip) AND src_ip!="-"
+    | eval sqli_match=if(
+        like(uri_path,"%select%")
+        OR like(uri_path,"%union%")
+        OR like(uri_path,"%sleep(%")
+        OR like(uri_path,"%benchmark(%")
+        OR like(uri_path,"%information_schema%")
+        OR like(uri_path,"%xp_cmdshell%")
+        OR like(req_line,"%select%")
+        OR like(req_line,"%union%")
+        OR like(req_line,"%sleep(%")
+        OR like(req_line,"%benchmark(%")
+        OR like(req_line,"%information_schema%")
+        OR like(req_line,"%xp_cmdshell%"),
+        1, 0)
+    | where sqli_match=1
+    | stats count as request_count
+        values(uri_path) as targeted_paths
+        values(http_status) as statuses
+        values(http_method) as methods
+        values(user_agent) as user_agents
+        by src_ip
+    | where request_count >= 2
+    | eval detection_name="[HIGH] Web - SQL Injection Attempt Activity"
+    | eval severity="high"
+    | table detection_name severity src_ip request_count targeted_paths statuses methods user_agents
+
+  cron_schedule: "0 * * * *"
+  earliest_time: "-24h"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: src_ip
+  object_type: ip
+  score: 85
+
+false_positives:
+  - Authorized penetration testing
+  - Vulnerability scanners
+  - Web application security testing tools
+  - QA testing with SQL keywords in URLs
+  - Search functionality containing SQL-related words
+
+references:
+  - https://owasp.org/Top10/A03_2021-Injection/
+  - https://attack.mitre.org/techniques/T1190/

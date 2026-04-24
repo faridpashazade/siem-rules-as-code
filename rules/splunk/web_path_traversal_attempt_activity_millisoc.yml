@@ -1,0 +1,130 @@
+id: SPL-015
+name: Web - Path Traversal Attempt Activity - millisoc.tech
+description: Detects repeated path traversal attempts in HTTP requests, including ../ sequences, encoded traversal payloads, and access attempts to sensitive system files such as /etc/passwd, /etc/shadow, win.ini, boot.ini, and /proc/self/environ.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - path-traversal
+  - directory-traversal
+  - file-disclosure
+  - broken-access-control
+  - nginx
+  - millisoc.tech
+
+owasp:
+  category: A01
+  name: Broken Access Control
+
+cwe:
+  - CWE-22
+
+mitre:
+  tactics:
+    - Initial Access
+    - Discovery
+  techniques:
+    - T1190
+    - T1083
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index=* sourcetype=_json source=millisoc-nginx earliest=-24h latest=now
+    | spath
+    | eval src_ip=case(
+        isnotnull(x_forwarded_for) AND x_forwarded_for!="", mvindex(split(x_forwarded_for, ","), 0),
+        isnotnull(remote_addr) AND remote_addr!="", remote_addr,
+        true(), null()
+    )
+    | eval src_ip=trim(src_ip)
+    | eval http_method=upper(coalesce(method, "unknown"))
+    | eval uri_path=lower(coalesce(uri, ""))
+    | eval req_line=lower(coalesce(request, ""))
+    | eval decoded_uri=lower(urldecode(uri_path))
+    | eval decoded_req=lower(urldecode(req_line))
+    | eval http_status=tonumber(status)
+    | where isnotnull(src_ip) AND src_ip!="-"
+
+    | eval traversal_match=if(
+        like(uri_path,"%../%")
+        OR like(uri_path,"%..\\%")
+        OR like(uri_path,"%2e%2e%2f%")
+        OR like(uri_path,"%2e%2e/%")
+        OR like(uri_path,"%2e%2e%5c%")
+        OR like(decoded_uri,"%../%")
+        OR like(decoded_uri,"%..\\%")
+        OR like(decoded_uri,"%/etc/passwd%")
+        OR like(decoded_uri,"%/etc/shadow%")
+        OR like(decoded_uri,"%windows/win.ini%")
+        OR like(decoded_uri,"%boot.ini%")
+        OR like(decoded_uri,"%/proc/self/environ%")
+        OR like(req_line,"%../%")
+        OR like(decoded_req,"%../%")
+        OR like(decoded_req,"%/etc/passwd%")
+        OR like(decoded_req,"%/etc/shadow%")
+        OR like(decoded_req,"%windows/win.ini%"),
+        1, 0
+    )
+
+    | where traversal_match=1
+
+    | eval traversal_type=case(
+        like(decoded_uri,"%../%") OR like(decoded_req,"%../%"), "Directory Traversal Sequence",
+        like(decoded_uri,"%..\\%") OR like(decoded_req,"%..\\%"), "Windows Directory Traversal Sequence",
+        like(uri_path,"%2e%2e%2f%") OR like(uri_path,"%2e%2e/%") OR like(uri_path,"%2e%2e%5c%"), "Encoded Directory Traversal",
+        like(decoded_uri,"%/etc/passwd%") OR like(decoded_req,"%/etc/passwd%"), "Linux Password File Access Attempt",
+        like(decoded_uri,"%/etc/shadow%") OR like(decoded_req,"%/etc/shadow%"), "Linux Shadow File Access Attempt",
+        like(decoded_uri,"%windows/win.ini%") OR like(decoded_req,"%windows/win.ini%"), "Windows win.ini Access Attempt",
+        like(decoded_uri,"%boot.ini%") OR like(decoded_req,"%boot.ini%"), "Windows boot.ini Access Attempt",
+        like(decoded_uri,"%/proc/self/environ%") OR like(decoded_req,"%/proc/self/environ%"), "Linux Process Environment Access Attempt",
+        true(), "Possible Path Traversal Attempt"
+    )
+
+    | stats count as request_count
+        values(uri_path) as targeted_paths
+        values(http_status) as statuses
+        values(http_method) as methods
+        values(user_agent) as user_agents
+        values(traversal_type) as traversal_types
+        by src_ip
+
+    | where request_count >= 2
+    | eval detection_name="[HIGH] Web - Path Traversal Attempt Activity"
+    | eval severity="high"
+    | table detection_name severity src_ip request_count targeted_paths statuses methods user_agents traversal_types
+
+  cron_schedule: "0 * * * *"
+  earliest_time: "-24h"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: src_ip
+  object_type: ip
+  score: 85
+
+false_positives:
+  - Authorized penetration testing
+  - Vulnerability scanners
+  - Web application security testing tools
+  - User input containing file path examples
+  - Documentation pages containing Linux or Windows path examples
+  - Developer or QA testing
+
+references:
+  - https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+  - https://cwe.mitre.org/data/definitions/22.html
+  - https://attack.mitre.org/techniques/T1190/
+  - https://attack.mitre.org/techniques/T1083/

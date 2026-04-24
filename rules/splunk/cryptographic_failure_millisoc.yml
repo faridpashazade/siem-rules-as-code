@@ -1,0 +1,71 @@
+id: SPL-003
+name: Cryptographic Failure - millisoc.tech
+description: Detects insecure HTTP usage, sensitive parameters in URLs, and possible exposure of certificate or private key files against millisoc.tech.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - cryptographic-failure
+  - insecure-http
+  - sensitive-data-exposure
+  - credential-exposure
+  - millisoc.tech
+
+owasp:
+  category: A02
+  name: Cryptographic Failures
+
+mitre:
+  tactics:
+    - Credential Access
+    - Collection
+  techniques:
+    - T1552
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index="*"
+    | spath host
+    | search host="millisoc.tech"
+    | rex field=_raw "(?P<clientip>\d{1,3}(?:\.\d{1,3}){3})"
+    | rex field=_raw "(?P<uri>\/[^\s?]*(?:\?[^\s]*)?)"
+    | rex field=_raw "(?P<status>[2345]\d{2})"
+    | rex field=_raw "(?P<useragent>Mozilla\/[\d.]+\s\([^)]+\)[\w\s\/._,;:+()-]*)"
+    | where uri LIKE "http%" OR uri LIKE "%password%" OR uri LIKE "%token%" OR uri LIKE "%apikey%" OR uri LIKE "%.pem" OR uri LIKE "%.crt" OR uri LIKE "%.key"
+    | eval protocol=if(like(uri, "http://%"), "HTTP", "HTTPS")
+    | where protocol="HTTP" OR match(uri, "(?i)(password=|token=|apikey=)") OR match(uri, "\.(pem|crt|key)$")
+    | stats count by _time, clientip, uri, status, useragent
+    | sort - count
+
+  cron_schedule: "*/5 * * * *"
+  earliest_time: "-5m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: clientip
+  object_type: ip
+  score: 75
+
+false_positives:
+  - Security testing by authorized users
+  - Internal vulnerability scanners
+  - Application debugging traffic
+  - Misconfigured test endpoints
+  - Non-sensitive parameters containing words like token or password
+
+references:
+  - https://owasp.org/Top10/A02_2021-Cryptographic_Failures/
+  - https://attack.mitre.org/techniques/T1552/

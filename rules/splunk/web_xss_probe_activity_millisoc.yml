@@ -1,0 +1,131 @@
+id: SPL-014
+name: Web - Cross-Site Scripting Probe Activity - millisoc.tech
+description: Detects repeated Cross-Site Scripting probe activity in HTTP requests, including script tags, JavaScript handlers, iframe/img/svg payloads, alert functions, and document.cookie access attempts.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - xss
+  - cross-site-scripting
+  - injection
+  - http-requests
+  - nginx
+  - millisoc.tech
+
+owasp:
+  category: A03
+  name: Injection
+
+mitre:
+  tactics:
+    - Initial Access
+  techniques:
+    - T1190
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index=* sourcetype=_json source=millisoc-nginx earliest=-24h latest=now
+    | spath
+    | eval src_ip=case(
+        isnotnull(x_forwarded_for) AND x_forwarded_for!="", mvindex(split(x_forwarded_for, ","), 0),
+        isnotnull(remote_addr) AND remote_addr!="", remote_addr,
+        true(), null()
+    )
+    | eval src_ip=trim(src_ip)
+    | eval http_method=upper(coalesce(method, "unknown"))
+    | eval uri_path=lower(coalesce(uri, ""))
+    | eval req_line=lower(coalesce(request, ""))
+    | eval decoded_uri=lower(urldecode(uri_path))
+    | eval decoded_req=lower(urldecode(req_line))
+    | eval http_status=tonumber(status)
+    | where isnotnull(src_ip) AND src_ip!="-"
+
+    | eval xss_match=if(
+        like(uri_path,"%<script%")
+        OR like(decoded_uri,"%<script%")
+        OR like(uri_path,"%alert(%")
+        OR like(decoded_uri,"%alert(%")
+        OR like(uri_path,"%onerror=%")
+        OR like(decoded_uri,"%onerror=%")
+        OR like(uri_path,"%onload=%")
+        OR like(decoded_uri,"%onload=%")
+        OR like(uri_path,"%javascript:%")
+        OR like(decoded_uri,"%javascript:%")
+        OR like(uri_path,"%document.cookie%")
+        OR like(decoded_uri,"%document.cookie%")
+        OR like(uri_path,"%<svg%")
+        OR like(decoded_uri,"%<svg%")
+        OR like(uri_path,"%<img%")
+        OR like(decoded_uri,"%<img%")
+        OR like(uri_path,"%<iframe%")
+        OR like(decoded_uri,"%<iframe%")
+        OR like(req_line,"%<script%")
+        OR like(decoded_req,"%<script%")
+        OR like(req_line,"%alert(%")
+        OR like(decoded_req,"%alert(%")
+        OR like(req_line,"%javascript:%")
+        OR like(decoded_req,"%javascript:%"),
+        1, 0
+    )
+
+    | where xss_match=1
+
+    | eval xss_type=case(
+        like(decoded_uri,"%<script%") OR like(decoded_req,"%<script%"), "Script Tag Injection",
+        like(decoded_uri,"%alert(%") OR like(decoded_req,"%alert(%"), "JavaScript Alert Probe",
+        like(decoded_uri,"%onerror=%") OR like(decoded_req,"%onerror=%"), "HTML Event Handler - onerror",
+        like(decoded_uri,"%onload=%") OR like(decoded_req,"%onload=%"), "HTML Event Handler - onload",
+        like(decoded_uri,"%javascript:%") OR like(decoded_req,"%javascript:%"), "JavaScript URI Scheme",
+        like(decoded_uri,"%document.cookie%") OR like(decoded_req,"%document.cookie%"), "Cookie Access Attempt",
+        like(decoded_uri,"%<svg%") OR like(decoded_req,"%<svg%"), "SVG Based XSS Probe",
+        like(decoded_uri,"%<img%") OR like(decoded_req,"%<img%"), "IMG Tag XSS Probe",
+        like(decoded_uri,"%<iframe%") OR like(decoded_req,"%<iframe%"), "Iframe Injection Probe",
+        true(), "Possible XSS Probe"
+    )
+
+    | stats count as request_count
+        values(uri_path) as targeted_paths
+        values(http_status) as statuses
+        values(http_method) as methods
+        values(user_agent) as user_agents
+        values(xss_type) as xss_types
+        by src_ip
+
+    | where request_count >= 2
+    | eval detection_name="[HIGH] Web - Cross-Site Scripting Probe Activity"
+    | eval severity="high"
+    | table detection_name severity src_ip request_count targeted_paths statuses methods user_agents xss_types
+
+  cron_schedule: "0 * * * *"
+  earliest_time: "-24h"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: src_ip
+  object_type: ip
+  score: 85
+
+false_positives:
+  - Authorized penetration testing
+  - Vulnerability scanners
+  - Web application security testing tools
+  - User-submitted content containing HTML or JavaScript examples
+  - Developer or QA testing
+  - Documentation pages containing JavaScript examples
+
+references:
+  - https://owasp.org/Top10/A03_2021-Injection/
+  - https://attack.mitre.org/techniques/T1190/

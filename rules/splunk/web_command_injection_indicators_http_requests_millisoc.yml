@@ -1,0 +1,118 @@
+id: SPL-013
+name: Web - Command Injection Indicators in HTTP Requests - millisoc.tech
+description: Detects repeated command injection indicators in HTTP requests, including dangerous parameters, shell metacharacters, and operating system command usage.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - command-injection
+  - injection
+  - http-requests
+  - nginx
+  - millisoc.tech
+
+owasp:
+  category: A03
+  name: Injection
+
+mitre:
+  tactics:
+    - Initial Access
+    - Execution
+  techniques:
+    - T1190
+    - T1059
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index=* sourcetype=_json source=millisoc-nginx earliest=-24h latest=now
+    | spath
+    | eval src_ip=case(
+        isnotnull(x_forwarded_for) AND x_forwarded_for!="", mvindex(split(x_forwarded_for, ","), 0),
+        isnotnull(remote_addr) AND remote_addr!="", remote_addr,
+        true(), null()
+    )
+    | eval src_ip=trim(src_ip)
+    | eval http_method=upper(coalesce(method, "unknown"))
+    | eval uri_path=lower(coalesce(uri, ""))
+    | eval req_line=lower(coalesce(request, ""))
+    | eval decoded_uri=lower(urldecode(uri_path))
+    | eval decoded_req=lower(urldecode(req_line))
+    | eval http_status=tonumber(status)
+    | where isnotnull(src_ip) AND src_ip!="-"
+
+    | eval has_param=if(
+        match(decoded_uri, "(?i)(^|[?&])(cmd|exec|shell|command|run)=")
+        OR match(decoded_req, "(?i)(^|[?&])(cmd|exec|shell|command|run)="),
+        1, 0
+    )
+
+    | eval has_separator=if(
+        match(decoded_uri, "(?i)(;|&&|\|\||\||`|\$\()")
+        OR match(decoded_req, "(?i)(;|&&|\|\||\||`|\$\()"),
+        1, 0
+    )
+
+    | eval has_command=if(
+        match(decoded_uri, "(?i)(wget|curl|bash|/bin/sh|/bin/bash|cmd\.exe|powershell|whoami|uname)")
+        OR match(decoded_uri, "(?i)(^|[^a-zA-Z0-9_])(nc|id)([^a-zA-Z0-9_]|$)")
+        OR match(decoded_req, "(?i)(wget|curl|bash|/bin/sh|/bin/bash|cmd\.exe|powershell|whoami|uname)")
+        OR match(decoded_req, "(?i)(^|[^a-zA-Z0-9_])(nc|id)([^a-zA-Z0-9_]|$)"),
+        1, 0
+    )
+
+    | where (has_param=1 AND has_command=1) OR (has_separator=1 AND has_command=1)
+
+    | eval command_injection_type=case(
+        has_param=1 AND has_command=1, "Command Parameter With OS Command",
+        has_separator=1 AND has_command=1, "Shell Separator With OS Command",
+        true(), "Possible Command Injection"
+    )
+
+    | stats count as request_count
+        values(uri_path) as targeted_paths
+        values(http_status) as statuses
+        values(http_method) as methods
+        values(user_agent) as user_agents
+        values(command_injection_type) as command_injection_types
+        by src_ip
+
+    | where request_count >= 2
+    | eval detection_name="[HIGH] Web - Command Injection Indicators in HTTP Requests"
+    | eval severity="high"
+    | table detection_name severity src_ip request_count targeted_paths statuses methods user_agents command_injection_types
+
+  cron_schedule: "0 * * * *"
+  earliest_time: "-24h"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: src_ip
+  object_type: ip
+  score: 90
+
+false_positives:
+  - Authorized penetration testing
+  - Vulnerability scanners
+  - Web application security testing tools
+  - Legitimate requests containing command-like keywords
+  - Developer or QA testing
+  - URLs containing short strings such as id or nc in non-malicious context
+
+references:
+  - https://owasp.org/Top10/A03_2021-Injection/
+  - https://attack.mitre.org/techniques/T1190/
+  - https://attack.mitre.org/techniques/T1059/

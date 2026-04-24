@@ -1,0 +1,84 @@
+id: SPL-011
+name: Software and Data Integrity Failures - External Resource Injection - millisoc.tech
+description: Detects suspicious requests where parameters such as upload, src, file, download, exec, fetch, shell, or cmd reference external URLs. This may indicate external resource injection, remote file inclusion, malicious download, or unsafe data integrity handling.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - software-and-data-integrity-failures
+  - external-resource-injection
+  - remote-file-inclusion
+  - malicious-download
+  - unsafe-fetch
+  - millisoc.tech
+
+owasp:
+  category: A08
+  name: Software and Data Integrity Failures
+
+mitre:
+  tactics:
+    - Initial Access
+    - Execution
+  techniques:
+    - T1190
+    - T1059
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index="*"
+    | spath host
+    | search host="millisoc.tech"
+    | rex field=_raw "(?P<clientip>\d{1,3}(?:\.\d{1,3}){3})"
+    | rex field=_raw "(?P<uri>\/[^\s?]*(?:\?[^\s]*)?)"
+    | rex field=_raw "(?P<status>[2345]\d{2})"
+    | regex _raw="(?i)(upload|src|file|download|exec|fetch|shell|cmd)=(http|https|ftp):\/\/[^ ]+"
+    | search NOT uri="/product_images/"
+    | eval integrity_issue=case(
+        match(_raw, "(?i)upload=(http|https|ftp):\/\/"), "External Upload Source",
+        match(_raw, "(?i)src=(http|https|ftp):\/\/"), "External Source Injection",
+        match(_raw, "(?i)file=(http|https|ftp):\/\/"), "Remote File Inclusion Attempt",
+        match(_raw, "(?i)download=(http|https|ftp):\/\/"), "External Download Reference",
+        match(_raw, "(?i)exec=(http|https|ftp):\/\/"), "Remote Execution Parameter",
+        match(_raw, "(?i)fetch=(http|https|ftp):\/\/"), "Unsafe External Fetch",
+        match(_raw, "(?i)shell=(http|https|ftp):\/\/"), "Remote Shell Parameter",
+        match(_raw, "(?i)cmd=(http|https|ftp):\/\/"), "Remote Command Parameter",
+        true(), "Possible Software and Data Integrity Failure"
+    )
+    | stats count by _time, clientip, uri, status, integrity_issue
+    | sort - count
+
+  cron_schedule: "*/5 * * * *"
+  earliest_time: "-5m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: clientip
+  object_type: ip
+  score: 85
+
+false_positives:
+  - Authorized security testing
+  - Vulnerability scanners
+  - Legitimate external image or file references
+  - Application features that intentionally fetch remote resources
+  - CDN or third-party integration traffic
+  - Product image upload workflows
+
+references:
+  - https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - https://attack.mitre.org/techniques/T1190/
+  - https://attack.mitre.org/techniques/T1059/

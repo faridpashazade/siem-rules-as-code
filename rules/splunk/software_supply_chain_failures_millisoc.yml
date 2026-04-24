@@ -1,0 +1,86 @@
+id: SPL-010
+name: Software Supply Chain Failures - millisoc.tech
+description: Detects suspicious access attempts to software dependency, configuration, repository, vendor, and framework-related files that may indicate software supply chain exposure or dependency misconfiguration.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - software-supply-chain
+  - dependency-exposure
+  - exposed-config
+  - exposed-git
+  - exposed-vendor
+  - composer
+  - millisoc.tech
+
+owasp:
+  category: A08
+  name: Software and Data Integrity Failures
+
+mitre:
+  tactics:
+    - Initial Access
+    - Discovery
+  techniques:
+    - T1190
+    - T1083
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index="*"
+    | spath host
+    | search host="millisoc.tech"
+    | rex field=_raw "(?<clientip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
+    | rex field=_raw "(?<method>GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)"
+    | rex field=_raw "\"[A-Z]+\s(?<uri>[^\s\"]+)"
+    | rex field=_raw "HTTP\/\d\.\d\"\s(?<status>[1-5]\d{2})"
+    | rex field=uri "(?<suspicious_file>config\.php|phpinfo\.php|composer\.(json|lock)|\.git|\/vendor\/)"
+    | search uri="*config.php*" OR uri="*phpinfo.php*" OR uri="*/vendor/*" OR uri="*/.git*" OR uri="*composer*" OR uri="*aspx*"
+    | search NOT uri="*/product_images/*" NOT uri="*/css*" NOT uri="*/js*" NOT uri="*/img*" NOT uri="*/screenshot*" NOT uri="*/fonts*"
+    | eval supply_chain_issue=case(
+        like(uri,"%config.php%"), "Exposed Application Configuration File",
+        like(uri,"%phpinfo.php%"), "Exposed PHP Info File",
+        like(uri,"%/vendor/%"), "Exposed Dependency Vendor Directory",
+        like(uri,"%/.git%"), "Exposed Git Repository",
+        like(uri,"%composer.json%"), "Exposed Composer Dependency Manifest",
+        like(uri,"%composer.lock%"), "Exposed Composer Lock File",
+        like(uri,"%aspx%"), "Unexpected ASPX File Access",
+        true(), "Possible Software Supply Chain Exposure"
+    )
+    | stats count by _time, clientip, method, uri, status, suspicious_file, supply_chain_issue
+    | sort - count
+
+  cron_schedule: "*/5 * * * *"
+  earliest_time: "-5m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: clientip
+  object_type: ip
+  score: 85
+
+false_positives:
+  - Authorized vulnerability scanning
+  - Internal security testing
+  - Developer access to test environment
+  - Web crawler requesting common files
+  - Misconfigured public assets
+  - Legacy application files
+
+references:
+  - https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/
+  - https://attack.mitre.org/techniques/T1190/
+  - https://attack.mitre.org/techniques/T1083/

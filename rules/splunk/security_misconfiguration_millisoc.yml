@@ -1,0 +1,94 @@
+id: SPL-009
+name: Security Misconfiguration - millisoc.tech
+description: Detects suspicious access attempts to misconfigured or exposed endpoints such as phpinfo, server-status, admin, .git, config paths, and server error responses on millisoc.tech.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - security-misconfiguration
+  - exposed-endpoints
+  - exposed-git
+  - exposed-config
+  - server-status
+  - phpinfo
+  - millisoc.tech
+
+owasp:
+  category: A05
+  name: Security Misconfiguration
+
+mitre:
+  tactics:
+    - Initial Access
+    - Discovery
+  techniques:
+    - T1190
+    - T1083
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index="*"
+    | spath host
+    | search host="millisoc.tech"
+    | rex field=_raw "(?<clientip>\d{1,3}(?:\.\d{1,3}){3})"
+    | rex field=_raw "\"(?<method>GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)\s+(?<uri>[^\s\"]+)"
+    | rex field=_raw "\"\s+(?<status>\d{3})\s+"
+    | eval method=upper(method)
+    | eval uri=lower(uri)
+    | eval status=tonumber(status)
+    | search status=403 OR status=404 OR status=500 OR status=502 OR status=503
+        OR uri="*/phpinfo"
+        OR uri="*/server-status*"
+        OR uri="/admin"
+        OR uri="/.git"
+        OR uri="*/config"
+    | eval misconfiguration_type=case(
+        like(uri,"%/phpinfo%"), "Exposed PHP Info Page",
+        like(uri,"%/server-status%"), "Exposed Server Status Page",
+        uri="/admin", "Exposed Admin Endpoint",
+        uri="/.git", "Exposed Git Repository",
+        like(uri,"%/config%"), "Exposed Configuration Path",
+        status=403, "Forbidden Access Attempt",
+        status=404, "Possible Path Discovery or Missing Resource",
+        status=500, "Internal Server Error",
+        status=502, "Bad Gateway",
+        status=503, "Service Unavailable",
+        true(), "Unknown Misconfiguration"
+    )
+    | stats count by _time, _raw, clientip, method, uri, status, misconfiguration_type
+    | sort - count
+
+  cron_schedule: "*/5 * * * *"
+  earliest_time: "-5m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: clientip
+  object_type: ip
+  score: 80
+
+false_positives:
+  - Authorized vulnerability scanning
+  - Internal security testing
+  - Admin users accessing legitimate admin pages
+  - Temporary application errors
+  - Web crawlers requesting non-existing paths
+  - Maintenance or deployment activity
+
+references:
+  - https://owasp.org/Top10/A05_2021-Security_Misconfiguration/
+  - https://attack.mitre.org/techniques/T1190/
+  - https://attack.mitre.org/techniques/T1083/

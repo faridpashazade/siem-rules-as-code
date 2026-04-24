@@ -1,0 +1,69 @@
+id: SPL-007
+name: Mishandling of Exceptional Conditions - millisoc.tech
+description: Detects HTTP 500, 502, and 503 server-side errors that may indicate unhandled exceptions, backend failures, application crashes, or poor error handling.
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - exceptional-conditions
+  - error-handling
+  - server-error
+  - application-crash
+  - backend-failure
+  - millisoc.tech
+
+cwe:
+  - CWE-703
+  - CWE-755
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index="*"
+    | spath host
+    | search host="millisoc.tech"
+    | rex field=_raw "(?P<clientip>\d{1,3}(?:\.\d{1,3}){3})"
+    | rex field=_raw "(?P<uri>\/[^\s?]*(?:\?[^\s]*)?)"
+    | rex field=_raw "(?P<status>[2345]\d{2})"
+    | eval status=tonumber(status)
+    | where status=500 OR status=502 OR status=503
+    | eval error_type=case(
+        status=500, "Internal Server Error - Unhandled Exception",
+        status=502, "Bad Gateway - Backend Failure",
+        status=503, "Service Unavailable - App Crashed",
+        true(), "Unknown Server Error"
+    )
+    | stats count by _time, clientip, uri, status, error_type
+    | sort - count
+
+  cron_schedule: "*/5 * * * *"
+  earliest_time: "-5m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: clientip
+  object_type: ip
+  score: 65
+
+false_positives:
+  - Temporary application restart
+  - Planned maintenance
+  - Backend service deployment
+  - Load balancer or gateway issue
+  - Short-term application instability
+
+references:
+  - https://cwe.mitre.org/data/definitions/703.html
+  - https://cwe.mitre.org/data/definitions/755.html
