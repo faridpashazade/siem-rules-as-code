@@ -58,7 +58,7 @@ splunk:
     | rename _raw as "Source Log"
     | sort - count
 
-   cron_schedule: "0 * * * *"
+      cron_schedule: "0 * * * *"
   earliest_time: "-24h"
   latest_time: "now"
 
