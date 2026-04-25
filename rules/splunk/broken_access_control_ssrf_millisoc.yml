@@ -1,7 +1,6 @@
 id: SPL-002
 name: Broken Access Control and SSRF Attempts - millisoc.tech
-description: Detects suspicious web requests targeting sensitive paths, dangerous HTTP methods, and possible SSRF attempts against millisoc.tech.
-enabled: true
+description: Detects suspicious web requests targeting sensitive paths, dangerous HTTP methods, and possible SSRF attempts against millisoc.tech. Managed from GitHub.enabled: true
 severity: high
 
 tags:
