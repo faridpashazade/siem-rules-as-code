@@ -1,6 +1,6 @@
 id: SPL-007
 name: Mishandling of Exceptional Conditions - millisoc.tech
-description: Detects HTTP 500, 502, and 503 server-side errors that may indicate unhandled exceptions, backend failures, application crashes, or poor error handling.
+description: "Detects HTTP 500, 502, and 503 server-side errors that may indicate unhandled exceptions, backend failures, application crashes, or poor error handling. Managed from GitHub."
 enabled: true
 severity: high
 
