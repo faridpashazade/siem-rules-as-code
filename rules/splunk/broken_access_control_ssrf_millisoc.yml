@@ -58,8 +58,8 @@ splunk:
     | rename _raw as "Source Log"
     | sort - count
 
-  cron_schedule: "*/5 * * * *"
-  earliest_time: "-5m"
+   cron_schedule: "0 * * * *"
+  earliest_time: "-24h"
   latest_time: "now"
 
   alert_type: "number of events"
