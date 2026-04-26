@@ -1,0 +1,68 @@
+name: QRadar Rules Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate QRadar Rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate QRadar rule files
+        run: python scripts/validate_qradar_rules.py
+
+  deploy:
+    name: QRadar API Sync Dry Run
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Test QRadar API connection
+        env:
+          QRADAR_URL: ${{ secrets.QRADAR_URL }}
+          QRADAR_TOKEN: ${{ secrets.QRADAR_TOKEN }}
+          QRADAR_API_VERSION: ${{ secrets.QRADAR_API_VERSION }}
+          QRADAR_VERIFY_SSL: ${{ secrets.QRADAR_VERIFY_SSL }}
+          QRADAR_DRY_RUN: ${{ secrets.QRADAR_DRY_RUN }}
+        run: python scripts/test_qradar_connection.py
+
+      - name: Run QRadar metadata sync
+        env:
+          QRADAR_URL: ${{ secrets.QRADAR_URL }}
+          QRADAR_TOKEN: ${{ secrets.QRADAR_TOKEN }}
+          QRADAR_API_VERSION: ${{ secrets.QRADAR_API_VERSION }}
+          QRADAR_VERIFY_SSL: ${{ secrets.QRADAR_VERIFY_SSL }}
+          QRADAR_DRY_RUN: ${{ secrets.QRADAR_DRY_RUN }}
+        run: python scripts/deploy_qradar.py
