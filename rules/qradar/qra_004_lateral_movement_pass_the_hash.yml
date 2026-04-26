@@ -1,0 +1,67 @@
+id: QRA-004
+name: Lateral Movement via Pass-the-Hash
+description: "Detects possible pass-the-hash lateral movement using NTLM authentication patterns across multiple hosts."
+enabled: true
+severity: critical
+
+tags:
+  - qradar
+  - windows
+  - active-directory
+  - lateral-movement
+  - pass-the-hash
+  - ntlm
+  - offense-rule
+
+qradar:
+  rule_type: EVENT
+  offense: true
+  offense_index: source_ip
+  rule_group: GitHub Detection Rules
+  log_source_type: Microsoft Windows Security Event Log
+
+  event_ids:
+    - 4624
+    - 4627
+    - 4776
+
+  qids: []
+
+  indicators:
+    - NTLM authentication
+    - Logon Type 3
+    - same account used across multiple destination hosts
+    - short time window authentication bursts
+
+  threshold:
+    count: 3
+    time_window: 10 minutes
+    group_by:
+      - username
+      - source_ip
+
+  qradar_rule_logic: |
+    Apply this rule when NTLM-based successful logons are observed from the same source IP or same account across multiple destination hosts.
+    This behavior can indicate lateral movement using pass-the-hash techniques.
+
+  rule_response: |
+    Create an offense.
+    Add all matching events to the offense.
+    Index the offense by Source IP.
+    Set severity to Critical.
+
+mitre:
+  tactics:
+    - Lateral Movement
+  techniques:
+    - T1550.002
+
+false_positives:
+  - Administrative remote management
+  - Vulnerability scanning with domain credentials
+  - Software deployment tools
+
+test_steps:
+  - Identify NTLM logon events in QRadar.
+  - Build the QRadar Custom Rule using the matching QIDs from Log Activity.
+  - Confirm offense creation when the same account authenticates to multiple hosts.

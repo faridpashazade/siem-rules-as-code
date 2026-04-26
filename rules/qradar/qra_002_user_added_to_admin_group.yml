@@ -1,0 +1,75 @@
+id: QRA-002
+name: User Added to Administrator Group
+description: "Detects when a user is added to a privileged administrator group and generates an offense in QRadar."
+enabled: true
+severity: critical
+
+tags:
+  - qradar
+  - windows
+  - active-directory
+  - privilege-escalation
+  - administrator-group
+  - offense-rule
+
+qradar:
+  rule_type: EVENT
+  offense: true
+  offense_index: username
+  rule_group: GitHub Detection Rules
+  log_source_type: Microsoft Windows Security Event Log
+
+  event_ids:
+    - 4728
+    - 4732
+    - 4756
+
+  qids:
+    - 5002738
+    - 5002233
+    - 5002382
+    - 5000903
+
+  monitored_groups:
+    - Administrators
+    - Domain Admins
+    - Enterprise Admins
+    - Schema Admins
+    - Domain Controllers
+
+  qradar_rule_logic: |
+    Apply User Added to Administrator Group on events which are detected by the Local system
+    and when the event QID is one of the following:
+    5002738 A member was added to a security-enabled global group,
+    5002233 A member was added to a security-enabled universal group,
+    5002382 Group Member Added,
+    5000903 Success Audit: A member was added to a security-enabled local group
+    and when the Event Payload contains Administrators, Administrators, Domain Admins, Enterprise Admins, or Domain Controllers.
+
+  rule_response: |
+    Create an offense.
+    Add the event to the offense.
+    Set offense severity to Critical.
+    Index the offense by username.
+
+  analyst_note: |
+    Verify whether the group membership change was approved.
+    Check the source user who performed the action.
+    Review recent logins and activity by the newly privileged account.
+
+mitre:
+  tactics:
+    - Privilege Escalation
+    - Persistence
+  techniques:
+    - T1098
+
+false_positives:
+  - Approved administrator onboarding
+  - Planned privilege assignment
+  - Temporary emergency access
+
+test_steps:
+  - Add a test user to Administrators, Domain Admins, or another privileged group.
+  - Confirm one of the configured QIDs appears in QRadar Log Activity.
+  - Confirm QRadar creates an offense for this rule.

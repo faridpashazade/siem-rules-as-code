@@ -1,0 +1,67 @@
+id: QRA-005
+name: Suspicious PowerShell Execution
+description: "Detects encoded, obfuscated, remote download, or suspicious PowerShell command execution."
+enabled: true
+severity: high
+
+tags:
+  - qradar
+  - windows
+  - powershell
+  - execution
+  - obfuscation
+  - offense-rule
+
+qradar:
+  rule_type: EVENT
+  offense: true
+  offense_index: username
+  rule_group: GitHub Detection Rules
+  log_source_type: Microsoft Windows Security Event Log
+
+  event_ids:
+    - 4104
+    - 4688
+
+  qids: []
+
+  suspicious_keywords:
+    - EncodedCommand
+    - FromBase64String
+    - Invoke-Expression
+    - IEX
+    - DownloadString
+    - Net.WebClient
+    - Invoke-WebRequest
+    - Start-BitsTransfer
+    - bypass
+    - hidden
+    - noprofile
+
+  qradar_rule_logic: |
+    Apply this rule when PowerShell command line or script block logging contains encoded, obfuscated, or remote execution indicators.
+    This may indicate malicious PowerShell usage.
+
+  rule_response: |
+    Create an offense.
+    Add the event to the offense.
+    Index the offense by Username.
+    Set severity to High.
+
+mitre:
+  tactics:
+    - Execution
+    - Defense Evasion
+  techniques:
+    - T1059.001
+    - T1027
+
+false_positives:
+  - Administrative PowerShell scripts
+  - Security tools
+  - Software deployment automation
+
+test_steps:
+  - Run a benign encoded PowerShell test command.
+  - Confirm matching PowerShell event appears in QRadar.
+  - Confirm QRadar creates an offense.

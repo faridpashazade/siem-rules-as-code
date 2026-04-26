@@ -1,0 +1,61 @@
+id: QRA-011
+name: Privileged Account Creation Detected
+description: "Detects creation of a new privileged or administrator-level account."
+enabled: true
+severity: critical
+
+tags:
+  - qradar
+  - windows
+  - active-directory
+  - privileged-account
+  - account-creation
+  - persistence
+  - offense-rule
+
+qradar:
+  rule_type: EVENT
+  offense: true
+  offense_index: username
+  rule_group: GitHub Detection Rules
+  log_source_type: Microsoft Windows Security Event Log
+
+  event_ids:
+    - 4720
+
+  qids:
+    - 5002943
+
+  monitored_keywords:
+    - admin
+    - administrator
+    - privileged
+    - domain admin
+    - serviceadmin
+
+  qradar_rule_logic: |
+    Apply this rule when a new Windows account is created and the username or payload indicates administrative or privileged intent.
+    This can indicate persistence or unauthorized privileged account creation.
+
+  rule_response: |
+    Create an offense.
+    Add the event to the offense.
+    Index the offense by Username.
+    Set severity to Critical.
+
+mitre:
+  tactics:
+    - Persistence
+    - Privilege Escalation
+  techniques:
+    - T1136
+
+false_positives:
+  - Approved administrator onboarding
+  - Helpdesk-created admin account
+  - Planned service account creation
+
+test_steps:
+  - Create a test account with an admin-like name.
+  - Confirm account creation event appears in QRadar.
+  - Confirm QRadar creates an offense.

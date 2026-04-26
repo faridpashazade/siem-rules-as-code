@@ -1,0 +1,68 @@
+id: QRA-008
+name: Scheduled Task Created for Persistence
+description: "Detects creation of new scheduled tasks that may be used for persistence."
+enabled: true
+severity: high
+
+tags:
+  - qradar
+  - windows
+  - scheduled-task
+  - persistence
+  - defense-evasion
+  - offense-rule
+
+qradar:
+  rule_type: EVENT
+  offense: true
+  offense_index: username
+  rule_group: GitHub Detection Rules
+  log_source_type: Microsoft Windows Security Event Log
+
+  event_ids:
+    - 4698
+    - 4702
+    - 106
+    - 140
+
+  qids: []
+
+  suspicious_keywords:
+    - schtasks
+    - powershell
+    - cmd.exe
+    - wscript
+    - cscript
+    - mshta
+    - rundll32
+    - regsvr32
+    - temp
+    - appdata
+
+  qradar_rule_logic: |
+    Apply this rule when a new scheduled task is created or modified and the payload contains suspicious execution keywords.
+    Attackers commonly create scheduled tasks for persistence.
+
+  rule_response: |
+    Create an offense.
+    Add the event to the offense.
+    Index the offense by Username.
+    Set severity to High.
+
+mitre:
+  tactics:
+    - Persistence
+    - Privilege Escalation
+  techniques:
+    - T1053.005
+
+false_positives:
+  - Software updates
+  - Endpoint management tools
+  - Administrator-created scheduled tasks
+  - Backup jobs
+
+test_steps:
+  - Create a test scheduled task using schtasks.
+  - Confirm scheduled task creation event appears in QRadar.
+  - Confirm QRadar creates an offense.

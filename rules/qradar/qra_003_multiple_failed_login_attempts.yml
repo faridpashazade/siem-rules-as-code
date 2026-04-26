@@ -1,0 +1,80 @@
+id: QRA-003
+name: Multiple Failed Login Attempts
+description: "Detects multiple failed Windows login attempts from the same source IP within 5 minutes and generates an offense in QRadar."
+enabled: true
+severity: high
+
+tags:
+  - qradar
+  - windows
+  - active-directory
+  - authentication
+  - failed-login
+  - brute-force
+  - password-guessing
+  - offense-rule
+
+qradar:
+  rule_type: EVENT
+  offense: true
+  offense_index: source_ip
+  rule_group: GitHub Detection Rules
+  log_source_type: Microsoft Windows Security Event Log
+
+  event_ids:
+    - 4625
+
+  qids:
+    - 5001653
+    - 5000831
+    - 5000183
+    - 5001957
+    - 5003439
+    - 5000475
+
+  threshold:
+    count: 10
+    time_window: 5 minutes
+    group_by:
+      - source_ip
+
+  qradar_rule_logic: |
+    Apply Multiple Failed Login Attempts on events which are detected by the Local system
+    and when the event(s) were detected by one or more of Microsoft Windows Security Event Log
+    and when the event QID is one of the following:
+    5001653 An account failed to log on: Expired Password,
+    5000831 Success Audit: An account failed to log on,
+    5000183 Logon Failure,
+    5001957 Failure Audit: An account failed to log on: Wrong Password,
+    5003439 Failure Audit: An account failed to log on: Unknown user name or bad password,
+    5000475 Failure Audit: An account failed to log on
+    and when at least 10 events are seen with the same Source IP in 5 minutes.
+
+  rule_response: |
+    Create an offense.
+    Add the event to the offense.
+    Set offense severity to High.
+    Index the offense by Source IP.
+
+  analyst_note: |
+    This rule detects possible brute force or password guessing activity.
+    Investigate the source IP, targeted accounts, affected host, and whether a successful login followed the failed attempts.
+
+mitre:
+  tactics:
+    - Credential Access
+  techniques:
+    - T1110
+
+false_positives:
+  - User forgot password and retried multiple times
+  - Misconfigured service account
+  - Expired password attempts
+  - Vulnerability scanner or authentication testing
+  - Legacy application using old credentials
+
+test_steps:
+  - Generate multiple failed Windows login attempts from the same source IP.
+  - Confirm the selected failed login QIDs appear in QRadar Log Activity.
+  - Confirm at least 10 matching events occur from the same Source IP within 5 minutes.
+  - Confirm QRadar creates an offense for this rule.

@@ -1,0 +1,58 @@
+id: QRA-001
+name: Windows - New User Account Created
+description: "Detects creation of a new Windows user account and generates an offense in QRadar."
+enabled: true
+severity: high
+
+tags:
+  - qradar
+  - windows
+  - active-directory
+  - user-management
+  - account-creation
+  - offense-rule
+
+qradar:
+  rule_type: EVENT
+  offense: true
+  offense_index: username
+  rule_group: GitHub Detection Rules
+  log_source_type: Microsoft Windows Security Event Log
+
+  event_ids:
+    - 4720
+
+  qids:
+    - 5002943
+
+  qradar_rule_logic: |
+    Apply Windows - New User Account Created (4720) on events which are detected by the Local system
+    and when the event(s) were detected by one or more of Microsoft Windows Security Event Log
+    and when the event QID is one of the following: 5002943 A user account was created.
+
+  rule_response: |
+    Create an offense.
+    Add the event to the offense.
+    Set offense severity to High.
+    Index the offense by username.
+
+  analyst_note: |
+    Investigate who created the account, whether the account creation was approved,
+    and whether the account was added to privileged groups after creation.
+
+mitre:
+  tactics:
+    - Persistence
+    - Privilege Escalation
+  techniques:
+    - T1136
+
+false_positives:
+  - Approved user onboarding
+  - Helpdesk account creation
+  - IT administrator maintenance activity
+
+test_steps:
+  - Create a test Windows user account.
+  - Confirm QID 5002943 appears in QRadar Log Activity.
+  - Confirm QRadar creates an offense for this rule.

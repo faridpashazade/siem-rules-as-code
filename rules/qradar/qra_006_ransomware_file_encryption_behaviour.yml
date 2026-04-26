@@ -1,0 +1,77 @@
+id: QRA-006
+name: Ransomware File Encryption Behaviour
+description: "Detects ransomware-like behavior based on mass file modification, suspicious extensions, or rapid file encryption activity."
+enabled: true
+severity: critical
+
+tags:
+  - qradar
+  - windows
+  - ransomware
+  - file-encryption
+  - impact
+  - offense-rule
+
+qradar:
+  rule_type: EVENT
+  offense: true
+  offense_index: source_ip
+  rule_group: GitHub Detection Rules
+  log_source_type: Microsoft Windows Security Event Log
+
+  event_ids:
+    - 4663
+    - 4656
+    - 11
+
+  qids: []
+
+  indicators:
+    - mass file modification
+    - suspicious file extensions
+    - rapid rename activity
+    - access to many documents in short time
+    - shadow copy deletion indicators
+
+  suspicious_extensions:
+    - .locked
+    - .encrypted
+    - .crypt
+    - .ryk
+    - .wannacry
+    - .lockbit
+
+  threshold:
+    count: 50
+    time_window: 5 minutes
+    group_by:
+      - source_ip
+      - username
+
+  qradar_rule_logic: |
+    Apply this rule when many file modification or rename events are observed in a short period,
+    especially when suspicious ransomware-style extensions appear.
+    This behavior may indicate active file encryption.
+
+  rule_response: |
+    Create an offense.
+    Add all matching events to the offense.
+    Index the offense by Source IP.
+    Set severity to Critical.
+
+mitre:
+  tactics:
+    - Impact
+  techniques:
+    - T1486
+
+false_positives:
+  - Backup software
+  - File migration tools
+  - Bulk document processing
+  - Antivirus quarantine activity
+
+test_steps:
+  - Generate controlled bulk file modification events.
+  - Confirm QRadar receives file access or Sysmon file creation events.
+  - Confirm offense creation when threshold is met.
