@@ -23,7 +23,15 @@ qradar:
     - 4104
     - 4688
 
-  qids: []
+  qids:
+    - 5002305
+    - 5002304
+    - 5001993
+    - 5001992
+    - 5002310
+    - 5003189
+    - 5003188
+    - 5002307
 
   suspicious_keywords:
     - EncodedCommand
@@ -39,14 +47,27 @@ qradar:
     - noprofile
 
   qradar_rule_logic: |
-    Apply this rule when PowerShell command line or script block logging contains encoded, obfuscated, or remote execution indicators.
-    This may indicate malicious PowerShell usage.
+    Apply Suspicious PowerShell Execution on events which are detected by the Local system
+    and when the event QID is one of the following:
+    5002305 PowerShell console is ready for user input,
+    5002304 PowerShell console is starting up,
+    5001993 PowerShell Console Ready,
+    5001992 PowerShell Console Started,
+    5002310 PowerShell encountered an error,
+    5003189 PowerShell Script Execution End,
+    5003188 PowerShell Script Execution Start,
+    5002307 PowerShell Started an IPC
+    and when the Event Payload contains EncodedCommand OR FromBase64String OR Invoke-Expression OR IEX OR DownloadString OR Net.WebClient OR Invoke-WebRequest OR Start-BitsTransfer OR bypass OR hidden OR noprofile.
 
   rule_response: |
     Create an offense.
     Add the event to the offense.
     Index the offense by Username.
     Set severity to High.
+
+  analyst_note: |
+    This rule detects suspicious PowerShell execution patterns such as encoded commands,
+    obfuscation, remote download commands, and PowerShell execution bypass indicators.
 
 mitre:
   tactics:
@@ -60,8 +81,9 @@ false_positives:
   - Administrative PowerShell scripts
   - Security tools
   - Software deployment automation
+  - System administration activity
 
 test_steps:
   - Run a benign encoded PowerShell test command.
-  - Confirm matching PowerShell event appears in QRadar.
-  - Confirm QRadar creates an offense.
+  - Confirm matching PowerShell QIDs appear in QRadar Log Activity.
+  - Confirm QRadar creates an offense when suspicious payload keywords are observed.

@@ -25,7 +25,10 @@ qradar:
     - 4627
     - 4776
 
-  qids: []
+  qids:
+  - 5003347
+  - 5003081
+  - 5002186
 
   indicators:
     - NTLM authentication
@@ -37,13 +40,15 @@ qradar:
     count: 3
     time_window: 10 minutes
     group_by:
-      - username
       - source_ip
 
   qradar_rule_logic: |
-    Apply this rule when NTLM-based successful logons are observed from the same source IP or same account across multiple destination hosts.
-    This behavior can indicate lateral movement using pass-the-hash techniques.
-
+    Apply Lateral Movement via Pass-the-Hash on events which are detected by the Local system
+    and when the event QID is one of the following:
+    5003347 NTLM Authentication Failed,
+    5003081 NTLM authentication failed because access control restrictions are required,
+    5002186 The computer attempted to validate the credentials for an account
+    and when at least 3 events are seen with the same Source IP in 10 minutes.
   rule_response: |
     Create an offense.
     Add all matching events to the offense.
