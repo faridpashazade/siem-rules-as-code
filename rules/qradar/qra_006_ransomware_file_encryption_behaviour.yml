@@ -24,7 +24,16 @@ qradar:
     - 4656
     - 11
 
-  qids: []
+  qids:
+    - 5002935
+    - 5002269
+    - 5000207
+    - 5000206
+    - 5000847
+    - 5001162
+    - 5003533
+    - 5001830
+    - 5001834
 
   indicators:
     - mass file modification
@@ -46,12 +55,21 @@ qradar:
     time_window: 5 minutes
     group_by:
       - source_ip
-      - username
 
   qradar_rule_logic: |
-    Apply this rule when many file modification or rename events are observed in a short period,
-    especially when suspicious ransomware-style extensions appear.
-    This behavior may indicate active file encryption.
+    Apply Ransomware File Encryption Behaviour on events which are detected by the Local system
+    and when the event QID is one of the following:
+    5002935 An attempt was made to access an object,
+    5002269 An Object Was Deleted,
+    5000207 Object Deleted,
+    5000206 Object Open for Delete,
+    5000847 Success Audit: An object was deleted,
+    5001162 Success Audit: An object was deleted from the COM+ Catalog,
+    5003533 Success: An object was deleted,
+    5001830 FileCreate,
+    5001834 FileCreateStreamHash
+    and when the Event Payload contains .locked OR .encrypted OR .crypt OR .crypto OR .ryk OR .wannacry OR .lockbit OR .blackcat OR .conti OR .revil OR .onion OR ransom OR decrypt OR recovery
+    and when at least 50 events are seen with the same Source IP in 5 minutes.
 
   rule_response: |
     Create an offense.
