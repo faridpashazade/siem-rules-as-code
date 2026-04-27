@@ -1,6 +1,6 @@
 id: QRA-008
 name: Scheduled Task Created for Persistence
-description: "Detects creation of new scheduled tasks that may be used for persistence."
+description: "Detects creation or modification of scheduled tasks that may be used by attackers for persistence."
 enabled: true
 severity: high
 
@@ -25,7 +25,17 @@ qradar:
     - 106
     - 140
 
-  qids: []
+  qids:
+    - 5002939
+    - 5002816
+    - 5002940
+    - 5003548
+    - 5003547
+    - 5002273
+    - 5002941
+    - 5000051
+    - 5003177
+    - 5002401
 
   suspicious_keywords:
     - schtasks
@@ -36,18 +46,38 @@ qradar:
     - mshta
     - rundll32
     - regsvr32
-    - temp
     - appdata
+    - temp
+    - startup
+    - encodedcommand
+    - hidden
 
   qradar_rule_logic: |
-    Apply this rule when a new scheduled task is created or modified and the payload contains suspicious execution keywords.
-    Attackers commonly create scheduled tasks for persistence.
+    Apply Scheduled Task Created for Persistence on events which are detected by the Local system
+    and when the event QID is one of the following:
+    5002939 A scheduled task was created,
+    5002816 A scheduled task event was generated,
+    5002940 A scheduled task was updated,
+    5003548 A Scheduled Task was created,
+    5003547 A Scheduled Task was updated,
+    5002273 A scheduled task was registered,
+    5002941 A scheduled task was changed,
+    5000051 Scheduled task event,
+    5003177 Scheduled task event,
+    5002401 Task Enabled
+    and when the Event Payload contains schtasks OR powershell OR cmd.exe OR wscript OR cscript OR mshta OR rundll32 OR regsvr32 OR appdata OR temp OR startup OR encodedcommand OR hidden.
 
   rule_response: |
     Create an offense.
     Add the event to the offense.
     Index the offense by Username.
     Set severity to High.
+    Set credibility to 8.
+    Respond no more than 1 time per 20 minutes per Rule.
+
+  analyst_note: |
+    This rule detects scheduled task creation or modification with suspicious command indicators.
+    Attackers commonly use scheduled tasks to maintain persistence on Windows systems.
 
 mitre:
   tactics:
@@ -61,8 +91,10 @@ false_positives:
   - Endpoint management tools
   - Administrator-created scheduled tasks
   - Backup jobs
+  - Planned maintenance tasks
 
 test_steps:
   - Create a test scheduled task using schtasks.
-  - Confirm scheduled task creation event appears in QRadar.
-  - Confirm QRadar creates an offense.
+  - Confirm one of the configured QIDs appears in QRadar Log Activity.
+  - Confirm the payload contains suspicious execution indicators.
+  - Confirm QRadar creates an offense for this rule.
