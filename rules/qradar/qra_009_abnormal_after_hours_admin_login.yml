@@ -22,13 +22,22 @@ qradar:
   event_ids:
     - 4624
 
-  qids: []
+  qids:
+    - 5000835
+    - 5003029
+    - 5000038
+    - 5000135
+    - 5000858
+    - 5000011
+    - 5000193
+    - 5000181
+    - 5000023
 
   monitored_accounts:
-    - administrator
+    - Administrator
     - admin
-    - domain admin
-    - serviceadmin
+    - Domain Admins
+    - Enterprise Admins
 
   business_hours:
     start: "08:00"
@@ -36,14 +45,31 @@ qradar:
     timezone: "local"
 
   qradar_rule_logic: |
-    Apply this rule when a successful login is observed for an administrator or privileged account outside business hours.
-    This can indicate unauthorized access or compromised credentials.
+    Apply Abnormal After-Hours Admin Login on events which are detected by the Local system
+    and when the event QID is one of the following successful logon QIDs:
+    5000835 Success Audit,
+    5003029 Success Audit,
+    5000038 Success Audit,
+    5000135 Success Audit,
+    5000858 Success Audit,
+    5000011 Successful logon,
+    5000193 Successful logon session,
+    5000181 A logon session was created,
+    5000023 Successful logon
+    and when the Event Payload contains Administrator OR admin OR Domain Admins OR Enterprise Admins
+    and when the event occurs after 18:00 or before 08:00.
 
   rule_response: |
     Create an offense.
     Add the event to the offense.
     Index the offense by Username.
     Set severity to High.
+    Set credibility to 8.
+    Respond no more than 1 time per 20 minutes per Rule.
+
+  analyst_note: |
+    This rule detects administrator or privileged account logins outside normal business hours.
+    After-hours privileged logins may indicate compromised credentials or unauthorized administrative access.
 
 mitre:
   tactics:
@@ -56,8 +82,10 @@ false_positives:
   - Approved emergency maintenance
   - On-call administrator activity
   - Scheduled weekend maintenance
+  - Planned after-hours IT work
 
 test_steps:
-  - Perform a test admin login outside business hours.
-  - Confirm successful login event appears in QRadar.
-  - Confirm QRadar creates an offense.
+  - Perform a test administrator login outside business hours.
+  - Confirm one of the configured successful logon QIDs appears in QRadar Log Activity.
+  - Confirm the event payload contains Administrator, admin, Domain Admins, or Enterprise Admins.
+  - Confirm QRadar creates an offense for this rule.
