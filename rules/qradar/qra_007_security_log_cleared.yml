@@ -1,0 +1,64 @@
+id: QRA-007
+name: Security Log Cleared
+description: "Detects clearing of Windows Security audit logs, which may indicate defense evasion or an attacker attempt to hide activity."
+enabled: true
+severity: critical
+
+tags:
+  - qradar
+  - windows
+  - security-log
+  - audit-log-cleared
+  - defense-evasion
+  - offense-rule
+
+qradar:
+  rule_type: EVENT
+  offense: true
+  offense_index: username
+  rule_group: GitHub Detection Rules
+  log_source_type: Microsoft Windows Security Event Log
+
+  event_ids:
+    - 1102
+
+  qids:
+    - 5001535
+    - 5000178
+    - 5001534
+    - 5000006
+
+  qradar_rule_logic: |
+    Apply Security Log Cleared on events which are detected by the Local system
+    and when the event QID is one of the following:
+    5001535 Audit Log Cleared,
+    5000178 Audit log cleared,
+    5001534 Audit Log Cleared,
+    5000006 The audit log was cleared.
+
+  rule_response: |
+    Create an offense.
+    Add the event to the offense.
+    Index the offense by Username.
+    Set severity to Critical.
+    Respond no more than 1 time per 20 minutes per Rule.
+
+  analyst_note: |
+    This rule detects clearing of Windows Security audit logs.
+    Clearing security logs can indicate attacker defense evasion and an attempt to hide malicious activity.
+
+mitre:
+  tactics:
+    - Defense Evasion
+  techniques:
+    - T1070.001
+
+false_positives:
+  - Approved administrative maintenance
+  - Log retention or cleanup activity
+  - Security team testing
+
+test_steps:
+  - Clear the Windows Security event log in a controlled test environment.
+  - Confirm one of the configured QIDs appears in QRadar Log Activity.
+  - Confirm QRadar creates an offense for this rule.
