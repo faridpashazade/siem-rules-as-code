@@ -1,4 +1,4 @@
-id: QRA-011
+id: QRA-010
 name: Privileged Account Creation Detected
 description: "Detects creation of a new privileged or administrator-level account."
 enabled: true
