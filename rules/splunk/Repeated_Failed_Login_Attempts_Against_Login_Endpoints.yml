@@ -1,0 +1,78 @@
+id: SPL-001
+name: Web - Repeated Failed Login Attempts Against Login Endpoints
+description: "Detects repeated failed POST requests against web login endpoints such as /login and /wp-login.php from the same source IP. The rule triggers when 3 or more failed attempts are detected within the last 15 minutes. Managed from GitHub. Tested."
+enabled: true
+severity: high
+
+tags:
+  - web
+  - splunk
+  - authentication
+  - failed-login
+  - brute-force
+  - password-spraying
+  - credential-stuffing
+  - millisoc-nginx
+
+owasp:
+  category: A07
+  name: Identification and Authentication Failures
+
+mitre:
+  tactics:
+    - Credential Access
+  techniques:
+    - T1110
+    - T1110.003
+    - T1110.004
+
+splunk:
+  app: search
+  owner: nobody
+
+  search: |
+    index=* sourcetype=_json source=millisoc-nginx earliest=-15m latest=now
+    | spath
+    | eval src_ip=if(isnotnull(x_forwarded_for) AND x_forwarded_for!="", x_forwarded_for, remote_addr)
+    | eval http_method=upper(method)
+    | eval uri_path=lower(uri)
+    | eval http_status=tonumber(status)
+    | where isnotnull(src_ip) AND src_ip!="-"
+    | where http_method="POST"
+    | where uri_path IN ("/login","/wp-login.php")
+    | where http_status IN (400,403,404)
+    | stats count as failed_attempts values(uri_path) as login_paths values(http_status) as statuses values(user_agent) as user_agents by src_ip
+    | where failed_attempts >= 3
+    | eval detection_name="[HIGH] Web - Repeated Failed Login Attempts Against Login Endpoints"
+    | eval severity="high"
+    | table detection_name severity src_ip failed_attempts login_paths statuses user_agents
+
+  cron_schedule: "*/15 * * * *"
+  earliest_time: "-15m"
+  latest_time: "now"
+
+  alert_type: "number of events"
+  alert_comparator: "greater than"
+  alert_threshold: 0
+
+  actions:
+    email: false
+    notable: false
+
+risk:
+  object: src_ip
+  object_type: ip
+  score: 75
+
+false_positives:
+  - User repeatedly enters the wrong password
+  - Web application scanner testing login endpoints
+  - Monitoring or automation tools sending repeated POST requests to login paths
+  - Application misconfiguration causing repeated failed login responses
+  - Authorized brute force testing during security assessment
+
+references:
+  - https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+  - https://attack.mitre.org/techniques/T1110/
+  - https://attack.mitre.org/techniques/T1110/003/
+  - https://attack.mitre.org/techniques/T1110/004/
